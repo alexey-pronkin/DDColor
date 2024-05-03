@@ -77,7 +77,8 @@ class ImageColorizationPipeline(object):
             else:
                 pad_pixels = (self.width - self.height) // 2
                 pad_transform = transforms.Pad((0, pad_pixels))
-            img = pad_transform(img)
+            img = pad_transform(transforms.functional.to_pil_image(img))
+            img = np.array(img)
             self.height, self.width = img.shape[:2]
  
 
@@ -103,8 +104,9 @@ class ImageColorizationPipeline(object):
         output_img = (output_bgr * 255.0).round().astype(np.uint8)    
         if self.pad >= 1:
             crop_transform = transforms.CenterCrop(size=(self.old_height, self.old_width))
-            img = crop_transform(img)
+            output_img = crop_transform(transforms.functional.to_pil_image(output_img))
             self.height, self.width = img.shape[:2]
+            output_img = np.array(output_img)
         return output_img
 
 
