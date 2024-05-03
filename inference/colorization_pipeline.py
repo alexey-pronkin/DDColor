@@ -68,14 +68,17 @@ class ImageColorizationPipeline(object):
             if self.pad < 1:
                 print("Recommemded to pad model")
         if self.pad >= 1:
+            self.old_height = self.height
+            self.old_width = self.width
             if self.height>self.width:
                 # pad 100 to left/right and 50 to top/bottom
                 pad_pixels = (self.height - self.width) // 2
-                transform = transforms.Pad((pad_pixels, 0))
+                pad_transform = transforms.Pad((pad_pixels, 0))
             else:
                 pad_pixels = (self.width - self.height) // 2
-                transform = transforms.Pad((0, pad_pixels))
-            img = transform(img)
+                pad_transform = transforms.Pad((0, pad_pixels))
+            img = pad_transform(img)
+            self.height, self.width = img.shape[:2]
  
 
 
@@ -91,14 +94,17 @@ class ImageColorizationPipeline(object):
 
         tensor_gray_rgb = torch.from_numpy(img_gray_rgb.transpose((2, 0, 1))).float().unsqueeze(0).to(self.device)
         output_ab = self.model(tensor_gray_rgb).cpu()  # (1, 2, self.height, self.width)
-
+ 
         # resize ab -> concat original l -> rgb
         output_ab_resize = F.interpolate(output_ab, size=(self.height, self.width))[0].float().numpy().transpose(1, 2, 0)
         output_lab = np.concatenate((orig_l, output_ab_resize), axis=-1)
         output_bgr = cv2.cvtColor(output_lab, cv2.COLOR_LAB2BGR)
 
         output_img = (output_bgr * 255.0).round().astype(np.uint8)    
-
+        if self.pad >= 1:
+            crop_transform = transforms.CenterCrop(size=(self.old_height, self.old_width))
+            img = crop_transform(img)
+            self.height, self.width = img.shape[:2]
         return output_img
 
 
