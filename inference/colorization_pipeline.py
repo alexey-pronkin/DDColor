@@ -6,12 +6,14 @@ from tqdm import tqdm
 import torch
 from basicsr.archs.ddcolor_arch import DDColor
 import torch.nn.functional as F
+import torchvision.transforms as transforms
+
 
 
 class ImageColorizationPipeline(object):
 
-    def __init__(self, model_path, input_size=256, model_size='large'):
-        
+    def __init__(self, model_path, input_size=256, model_size='large', pad=0):
+        self.pad = pad
         self.input_size = input_size
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
@@ -59,10 +61,28 @@ class ImageColorizationPipeline(object):
         # print(self.width, self.height)
         # if self.width * self.height < 100000:
         #     self.input_size = 256
+        self.ratio = self.height / self.width 
+        
+        # add padding to image
+        if self.ratio > 1.1 or self.ratio < 0.9:
+            if self.pad < 1:
+                print("Recommemded to pad model")
+        if self.pad >= 1:
+            if self.height>self.width:
+                # pad 100 to left/right and 50 to top/bottom
+                pad_pixels = (self.height - self.width) // 2
+                transform = transforms.Pad((pad_pixels, 0))
+            else:
+                pad_pixels = (self.width - self.height) // 2
+                transform = transforms.Pad((0, pad_pixels))
+            img = transform(img)
+ 
+
 
         img = (img / 255.0).astype(np.float32)
         orig_l = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)[:, :, :1]  # (h, w, 1)
-
+        
+            
         # resize rgb image -> lab -> get grey -> rgb
         img = cv2.resize(img, (self.input_size, self.input_size))
         img_l = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)[:, :, :1]
@@ -88,6 +108,7 @@ def main():
     parser.add_argument('--input', type=str, default='figure/', help='input test image folder or video path')
     parser.add_argument('--output', type=str, default='results', help='output folder or video path')
     parser.add_argument('--input_size', type=int, default=512, help='input size for model')
+    parser.add_argument('--pad', type=int, default=0, help='1 for pad image with zeros')
     parser.add_argument('--model_size', type=str, default='large', help='ddcolor model size')
     args = parser.parse_args()
 
@@ -96,7 +117,7 @@ def main():
     img_list = os.listdir(args.input)
     assert len(img_list) > 0
 
-    colorizer = ImageColorizationPipeline(model_path=args.model_path, input_size=args.input_size, model_size=args.model_size)
+    colorizer = ImageColorizationPipeline(model_path=args.model_path, input_size=args.input_size, model_size=args.model_size, pad=args.pad)
 
     for name in tqdm(img_list):
         img = cv2.imread(os.path.join(args.input, name))
